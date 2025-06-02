@@ -224,7 +224,8 @@ with col_pagamento:
 
             if st.session_state.troco_ideal_calculado_formatado is not None:
                 st.markdown("#### Troco Ideal (Menor qtd. de moedas/cédulas):")
-                st.success(f"{st.session_state.troco_ideal_calculado_formatado}")
+                st.markdown(f"`{st.session_state.troco_ideal_calculado_formatado}`")
+
         
         if troco_devido >= 0:
             if st.button(f"✅ Confirmar Pagamento de {cliente_pag['id']} e Continuar Simulação", key=f"confirm_pag_{cliente_pag['id']}"):
