@@ -24,15 +24,15 @@ A interface permite gerar grupos de clientes aleatórios, acompanhar o fluxo do 
 
 ### Tela inicial
 Funções de gerar clientes aleatórios e atribuir as mesas.
-![alt text](image.png)
+![alt text](./assets/image.png)
 
 ### Após gerar as mesas com o Interval Partitioning
 O tempo vai rodando e pausa no momento em que alguém precisa pagar.
-![alt text](image-1.png)
+![alt text](./assets/image-1.png)
 
 ### Gerando troco com o algoritmos das moedas
 Consideramos o nosso caixa com as notas de 100, 50, 20, 5 e 1 real.
-![alt text](image-2.png)
+![alt text](./assets/image-2.png)
 
 
 ## Instalação 
