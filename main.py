@@ -76,8 +76,8 @@ def inicializar_estado():
 inicializar_estado()
 
 # --- Interface do Usuário (UI) ---
-st.set_page_config(page_title="Simulador de Restaurante Gulosos", layout="wide")
-st.title("🍽️ Simulador de Restaurante com Algoritmos Gulosos (Valores Inteiros)")
+st.set_page_config(page_title="Simulador de Restaurante Ambiciosos", layout="wide")
+st.title("🍽️ Simulador de Restaurante com Algoritmos Ambiciosos")
 
 # --- BARRA LATERAL ---
 st.sidebar.header("1. Configurar Simulação")
@@ -186,25 +186,45 @@ with col_pagamento:
         if troco_devido >= 0:
             if st.button(f"✅ Confirmar Pagamento de {cliente_pag['id']} e Continuar Simulação", key=f"confirm_pag_{cliente_pag['id']}"):
                 st.session_state.log_eventos.append(f"Pagamento de {cliente_pag['id']} (R${cliente_pag['valor_conta']}) confirmado.")
+
+                # Tentativa de atualizar o status do cliente para finalizado
+                cliente_finalizado_id = cliente_pag["id"]
+                cliente_encontrado_para_finalizar = False
                 for idx, c_main in enumerate(st.session_state.clientes):
-                    if c_main["id"] == cliente_pag["id"]:
+                    if c_main["id"] == cliente_finalizado_id:
                         st.session_state.clientes[idx]["status"] = "finalizado"
+                        cliente_encontrado_para_finalizar = True
                         break
-                st.session_state.clientes_finalizados.append(cliente_pag)
+                if not cliente_encontrado_para_finalizar:
+                    st.session_state.log_eventos.append(f"DEBUG ERRO: Cliente {cliente_finalizado_id} NÃO FOI ENCONTRADO na lista st.session_state.clientes para finalizar.")
+                st.session_state.clientes_finalizados.append(cliente_pag) # Adiciona à lista de finalizados (que é uma cópia)
                 st.session_state.cliente_pagando_atual = None
                 st.session_state.troco_ideal_calculado_formatado = None
+                # --- INÍCIO DO BLOCO DE DEPURAÇÃO ---
+                log_detalhado_clientes = []
+                status_do_cliente_que_pagou_na_lista_principal = "NÃO ENCONTRADO APÓS PAGAMENTO"
+                for c_debug in st.session_state.clientes:
+                    log_detalhado_clientes.append(
+                        f"ID: {c_debug['id']}, Status: {c_debug['status']}, "
+                        f"Chegada: {c_debug.get('chegada', 'N/A')}, Saida: {c_debug.get('saida', 'N/A')}"
+                    )
+                    if c_debug['id'] == cliente_finalizado_id:
+                        status_do_cliente_que_pagou_na_lista_principal = c_debug['status']
+                # --- FIM DO BLOCO DE DEPURAÇÃO ---
                 if st.session_state.clientes_esperando_na_fila_pagamento:
                     proximo_a_pagar = st.session_state.clientes_esperando_na_fila_pagamento.pop(0)
                     st.session_state.cliente_pagando_atual = proximo_a_pagar
                     st.session_state.simulacao_ativa = False
                     st.session_state.log_eventos.append(f"Cliente {proximo_a_pagar['id']} é o próximo a pagar. Simulação PAUSADA.")
                 else:
+                    # A decisão de continuar ou parar a simulação é feita aqui
                     if any(c['status'] != 'finalizado' for c in st.session_state.clientes):
                         st.session_state.simulacao_ativa = True
-                        st.session_state.log_eventos.append("Todos os pagamentos pendentes resolvidos. Simulação retomada.")
+                        st.session_state.log_eventos.append(f"Ainda há clientes não finalizados. Simulação retomada.")
                     else:
                         st.session_state.simulacao_ativa = False
-                        st.session_state.log_eventos.append("Todos os clientes finalizaram. Simulação concluída.")
+                        st.session_state.log_eventos.append(f"Todos os clientes finalizaram. Simulação concluída.")
+
                 st.rerun()
     else:
         st.write("Nenhum cliente processando pagamento no momento.")
@@ -218,42 +238,54 @@ with col_pagamento:
 
 # --- LÓGICA DA SIMULAÇÃO (AVANÇO DO RELÓGIO) ---
 if st.session_state.simulacao_ativa and not st.session_state.cliente_pagando_atual and st.session_state.clientes:
-    time.sleep(1.0)
-    st.session_state.relogio += 1
-    relogio_atual = st.session_state.relogio
+    # Define o tempo atual para processar eventos DESTE tick
+    relogio_para_eventos_deste_tick = st.session_state.relogio
     eventos_neste_tick = []
+
     # 1. Processar clientes chegando para sentar
     for idx, cliente in enumerate(st.session_state.clientes):
-        if cliente["status"] == "aguardando" and cliente["chegada"] == relogio_atual:
+        if cliente["status"] == "aguardando" and cliente["chegada"] == relogio_para_eventos_deste_tick:
             st.session_state.clientes[idx]["status"] = "sentado"
             st.session_state.clientes_na_mesa.append(st.session_state.clientes[idx])
-            eventos_neste_tick.append(f"Cliente {cliente['id']} sentou-se à mesa {cliente['mesa']} no tempo {relogio_atual}h.")
+            eventos_neste_tick.append(f"Cliente {cliente['id']} sentou-se à mesa {cliente['mesa']} no tempo {relogio_para_eventos_deste_tick}h.")
+
     # 2. Processar clientes saindo da mesa para pagar
     clientes_que_sairam_neste_tick = []
-    temp_clientes_na_mesa = list(st.session_state.clientes_na_mesa)
+    temp_clientes_na_mesa = list(st.session_state.clientes_na_mesa) # Cópia para iterar
     for cliente_na_mesa in temp_clientes_na_mesa:
-        if cliente_na_mesa["status"] == "sentado" and cliente_na_mesa["saida"] == relogio_atual:
+        if cliente_na_mesa["status"] == "sentado" and cliente_na_mesa["saida"] == relogio_para_eventos_deste_tick:
             for idx_main, c_main in enumerate(st.session_state.clientes):
                 if c_main["id"] == cliente_na_mesa["id"]:
                     st.session_state.clientes[idx_main]["status"] = "pagando"
                     break
-            st.session_state.clientes_na_mesa.remove(cliente_na_mesa)
+            st.session_state.clientes_na_mesa.remove(cliente_na_mesa) # Remover o objeto original
             st.session_state.clientes_esperando_na_fila_pagamento.append(cliente_na_mesa)
-            eventos_neste_tick.append(f"Cliente {cliente_na_mesa['id']} (mesa {cliente_na_mesa['mesa']}) levantou-se para pagar no tempo {relogio_atual}h.")
+            eventos_neste_tick.append(f"Cliente {cliente_na_mesa['id']} (mesa {cliente_na_mesa['mesa']}) levantou-se para pagar no tempo {relogio_para_eventos_deste_tick}h.")
             clientes_que_sairam_neste_tick.append(cliente_na_mesa)
+
+    # Se algum cliente saiu para pagar E o caixa está livre, processa o primeiro da fila
     if clientes_que_sairam_neste_tick and not st.session_state.cliente_pagando_atual:
         if st.session_state.clientes_esperando_na_fila_pagamento:
             proximo_a_pagar = st.session_state.clientes_esperando_na_fila_pagamento.pop(0)
             st.session_state.cliente_pagando_atual = proximo_a_pagar
-            st.session_state.simulacao_ativa = False
+            st.session_state.simulacao_ativa = False # Pausa para pagamento
             eventos_neste_tick.append(f"Cliente {proximo_a_pagar['id']} iniciando pagamento. Simulação PAUSADA.")
+
     if eventos_neste_tick:
         st.session_state.log_eventos.extend(eventos_neste_tick)
+
+    # Verifica se todos os clientes foram finalizados APÓS os eventos do tick atual
     todos_finalizados = all(c['status'] == 'finalizado' for c in st.session_state.clientes)
     if todos_finalizados and st.session_state.clientes:
         st.session_state.simulacao_ativa = False
-        st.session_state.log_eventos.append(f"Todos os {len(st.session_state.clientes)} clientes foram atendidos e pagaram. Simulação concluída no tempo {relogio_atual}h.")
+        st.session_state.log_eventos.append(f"Todos os {len(st.session_state.clientes)} clientes foram atendidos e pagaram. Simulação concluída no tempo {relogio_para_eventos_deste_tick}h.")
         st.balloons()
+    else:
+        # Se a simulação não terminou e não foi pausada para pagamento, avança para o próximo tick.
+        if st.session_state.simulacao_ativa:
+            time.sleep(1.0) # Mova o sleep para cá, para que ocorra apenas se a simulação for continuar
+            st.session_state.relogio += 1 # INCREMENTA O RELÓGIO PARA O PRÓXIMO TICK
+
     st.rerun()
 
 # --- Log de Eventos na Barra Lateral ---
